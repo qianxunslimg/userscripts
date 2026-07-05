@@ -166,17 +166,23 @@ function render() {
 
   app.innerHTML = `
     <main class="shell">
-      <header class="hero">
-        <a class="back-link" href="/" aria-label="返回 almoststable 首页">as</a>
-        <div class="hero-copy">
-          <p class="eyebrow">Userscripts by qxslimg</p>
-          <h1>油猴脚本库</h1>
-          <p>收纳我自己写的浏览器增强脚本。当前只有一个脚本，但这里按长期维护的目录设计：搜索、分类、详情和安装入口都可以直接扩展。</p>
-        </div>
-        <div class="hero-stats">
-          <div><strong>${scripts.length}</strong><span>脚本</span></div>
-          <div><strong>${categoryList().length - 1}</strong><span>分类</span></div>
-          <div><strong>0</strong><span>后端依赖</span></div>
+      <header class="page-header">
+        <nav class="crumb" aria-label="页面路径">
+          <a href="/">almoststable</a>
+          <span>/</span>
+          <strong>userscripts</strong>
+        </nav>
+        <div class="header-row">
+          <div class="hero-copy">
+            <p class="eyebrow">Userscripts by qxslimg</p>
+            <h1>油猴脚本库</h1>
+            <p>收纳我自己写的浏览器增强脚本。按长期维护的目录设计：搜索、分类、详情和安装入口都可以直接扩展。</p>
+          </div>
+          <div class="hero-stats">
+            <div><strong>${scripts.length}</strong><span>脚本</span></div>
+            <div><strong>${categoryList().length - 1}</strong><span>分类</span></div>
+            <div><strong>0</strong><span>后端依赖</span></div>
+          </div>
         </div>
       </header>
 
