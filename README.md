@@ -9,6 +9,7 @@
 ## Scripts
 
 - `scripts/chatgpt-session-converter.user.js`: ChatGPT 页面内复制 session JSON、CPA JSON、sub2api、sessionToken、accessToken。默认折叠成右下角按钮，点击后展开。
+- `scripts/api-capture-assistant.user.js`: 页面内 fetch / XHR 抓包助手。右下角 API 收件箱展示接口列表、问题接口、慢请求和详情，可复制 curl、请求、响应和默认脱敏的调试包。数据只保存在当前页面内存，不上传。
 
 ## Frontend
 
@@ -28,8 +29,8 @@
 
 1. 打开 Tampermonkey。
 2. 新建脚本。
-3. 粘贴 `scripts/chatgpt-session-converter.user.js` 的内容并保存。
-4. 打开 `https://chatgpt.com/`，右下角会出现 `Session Copy` 按钮。
+3. 粘贴目标 `.user.js` 的内容并保存，或从线上入口打开脚本安装地址。
+4. 打开匹配页面，右下角会出现对应脚本入口。
 
 ## Check
 

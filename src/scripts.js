@@ -19,6 +19,26 @@ export const scripts = [
     sourcePath: "scripts/chatgpt-session-converter.user.js",
     installNote: "安装后打开 ChatGPT，右下角会出现 Session Copy 按钮。",
   },
+  {
+    key: "api-capture-assistant",
+    title: "API Capture Assistant",
+    cnTitle: "网页 API 抓包助手",
+    file: "api-capture-assistant.user.js",
+    version: "0.1.0",
+    updated: "2026-07-06",
+    status: "维护中",
+    category: "Debug",
+    summary:
+      "监听页面 fetch / XHR，在页面右下角生成 API 收件箱，可复制请求、响应、curl 和脱敏调试包。",
+    why:
+      "它不是 DevTools 的替代品，而是把高频排查动作前置到页面里：问题接口筛选、慢请求标记、默认脱敏复制、本页内存记录都在一个轻浮层里完成。",
+    matches: ["*://*/*"],
+    grants: ["GM_setClipboard"],
+    runAt: "document-start",
+    tags: ["fetch", "xhr", "curl", "json", "debug", "local-only"],
+    sourcePath: "scripts/api-capture-assistant.user.js",
+    installNote: "安装后访问任意网页，右下角会出现 API 入口；快捷键 Alt+Shift+A 可展开或折叠。",
+  },
 ];
 
 export const repositoryUrl = "https://github.com/qianxunslimg/userscripts";
