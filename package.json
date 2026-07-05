@@ -1,0 +1,9 @@
+{
+  "name": "userscripts",
+  "private": true,
+  "version": "0.1.0",
+  "type": "commonjs",
+  "scripts": {
+    "check": "node --check scripts/*.user.js"
+  }
+}
