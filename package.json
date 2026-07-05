@@ -2,8 +2,15 @@
   "name": "userscripts",
   "private": true,
   "version": "0.1.0",
-  "type": "commonjs",
+  "type": "module",
   "scripts": {
-    "check": "node --check scripts/*.user.js"
+    "dev": "vite --host 0.0.0.0",
+    "build": "vite build",
+    "check": "node --check scripts/*.user.js",
+    "validate": "npm run check && npm run build",
+    "preview": "vite preview --host 0.0.0.0 --port 4174"
+  },
+  "devDependencies": {
+    "vite": "^5.4.21"
   }
 }
