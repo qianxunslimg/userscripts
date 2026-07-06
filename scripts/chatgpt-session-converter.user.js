@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ChatGPT Session Copier
 // @namespace    https://web-tools.local/
-// @version      0.1.1
+// @version      0.1.2
 // @author       qxslimg
 // @description  Copy ChatGPT session JSON, CPA JSON, sub2api bundle, session token, and access token from chatgpt.com.
 // @match        https://chatgpt.com/*
@@ -238,7 +238,7 @@
     const status = document.querySelector("#maysafe-session-status");
     if (!status) return;
     status.textContent = text;
-    status.style.color = isError ? "#dc2626" : "#0f766e";
+    status.dataset.state = isError ? "error" : "success";
   }
 
   async function copyPayload(kind) {
@@ -272,94 +272,175 @@
     panel.hidden = true;
     panel.innerHTML = `
       <div class="maysafe-session-head">
-        <div>
-          <strong>Session Copier</strong>
-          <span>本地读取当前账号</span>
+        <div class="maysafe-session-brand">
+          <span class="maysafe-session-logo" aria-hidden="true">
+            <svg viewBox="0 0 24 24" role="img">
+              <path d="M8 7.5A2.5 2.5 0 0 1 10.5 5h6A2.5 2.5 0 0 1 19 7.5v6A2.5 2.5 0 0 1 16.5 16h-6A2.5 2.5 0 0 1 8 13.5v-6Z"></path>
+              <path d="M5 10.5A2.5 2.5 0 0 1 7.5 8H8v5.5A2.5 2.5 0 0 0 10.5 16H16v.5A2.5 2.5 0 0 1 13.5 19h-6A2.5 2.5 0 0 1 5 16.5v-6Z"></path>
+            </svg>
+          </span>
+          <div>
+            <strong>Session Copier</strong>
+            <span>本地读取当前 ChatGPT 账号</span>
+          </div>
         </div>
         <button class="maysafe-session-close" type="button" aria-label="折叠">×</button>
       </div>
       <div class="maysafe-session-actions">
-        <button data-kind="raw">原始 JSON</button>
-        <button data-kind="cpa">CPA JSON</button>
-        <button data-kind="sub">sub2api</button>
-        <button data-kind="session">sessionToken</button>
-        <button data-kind="access">accessToken</button>
+        <button data-kind="cpa"><strong>CPA JSON</strong><span>Codex / account 配置</span></button>
+        <button data-kind="sub"><strong>sub2api</strong><span>代理服务账号包</span></button>
+        <button data-kind="raw"><strong>原始 Session</strong><span>/api/auth/session 响应</span></button>
+        <button data-kind="session"><strong>sessionToken</strong><span>只复制 session token</span></button>
+        <button data-kind="access"><strong>accessToken</strong><span>只复制 access token</span></button>
       </div>
-      <div id="maysafe-session-status">选择要复制的格式</div>
+      <div class="maysafe-session-foot">
+        <div id="maysafe-session-status" data-state="idle">选择格式后复制到剪贴板</div>
+        <span>local only</span>
+      </div>
     `;
     const trigger = document.createElement("button");
     trigger.id = "maysafe-session-trigger";
     trigger.type = "button";
-    trigger.innerHTML = `<span>Session</span><strong>Copy</strong>`;
+    trigger.setAttribute("aria-label", "打开 Session Copier");
+    trigger.innerHTML = `
+      <span class="maysafe-session-trigger-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" role="img">
+          <path d="M8 7.5A2.5 2.5 0 0 1 10.5 5h6A2.5 2.5 0 0 1 19 7.5v6A2.5 2.5 0 0 1 16.5 16h-6A2.5 2.5 0 0 1 8 13.5v-6Z"></path>
+          <path d="M5 10.5A2.5 2.5 0 0 1 7.5 8H8v5.5A2.5 2.5 0 0 0 10.5 16H16v.5A2.5 2.5 0 0 1 13.5 19h-6A2.5 2.5 0 0 1 5 16.5v-6Z"></path>
+        </svg>
+      </span>
+      <span class="maysafe-session-trigger-text">Session</span>
+    `;
     const style = document.createElement("style");
     style.textContent = `
+      #maysafe-session-root,
+      #maysafe-session-root * {
+        box-sizing: border-box;
+      }
       #maysafe-session-root {
         position: fixed;
-        right: 18px;
-        bottom: 18px;
+        right: 22px;
+        bottom: 22px;
         z-index: 2147483647;
-        color: #0f172a;
-        font: 13px/1.4 ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        display: grid;
+        justify-items: end;
+        gap: 10px;
+        color: #e7edf4;
+        font: 13px/1.45 Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       }
       #maysafe-session-trigger {
-        min-width: 112px;
         height: 42px;
+        min-width: 116px;
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        gap: 7px;
-        padding: 0 14px;
-        border: 1px solid rgba(20, 184, 166, 0.48);
+        gap: 9px;
+        padding: 0 13px 0 9px;
+        border: 1px solid rgba(114, 133, 153, 0.38);
         border-radius: 999px;
-        background: linear-gradient(135deg, rgba(20, 184, 166, 0.96), rgba(37, 99, 235, 0.96));
-        color: #ffffff;
+        background:
+          linear-gradient(180deg, rgba(18, 25, 35, 0.94), rgba(8, 12, 18, 0.94));
+        color: #e7edf4;
         cursor: pointer;
-        box-shadow: 0 14px 34px rgba(15, 23, 42, 0.22);
-        backdrop-filter: blur(14px);
-      }
-      #maysafe-session-trigger span {
-        font-size: 12px;
-        opacity: 0.82;
-      }
-      #maysafe-session-trigger strong {
-        font-size: 13px;
-        letter-spacing: 0;
+        box-shadow:
+          0 16px 42px rgba(0, 0, 0, 0.3),
+          inset 0 1px 0 rgba(255, 255, 255, 0.06);
+        backdrop-filter: blur(16px);
+        transition: border-color 140ms ease, transform 140ms ease, background 140ms ease, box-shadow 140ms ease;
       }
       #maysafe-session-trigger:hover {
+        border-color: rgba(116, 242, 214, 0.7);
         transform: translateY(-1px);
-        box-shadow: 0 18px 42px rgba(15, 23, 42, 0.26);
+        box-shadow:
+          0 20px 50px rgba(0, 0, 0, 0.34),
+          0 0 0 4px rgba(116, 242, 214, 0.08);
+      }
+      #maysafe-session-trigger[hidden] {
+        display: none;
+      }
+      #maysafe-session-trigger:focus-visible,
+      #maysafe-session-panel button:focus-visible {
+        outline: 2px solid rgba(116, 242, 214, 0.72);
+        outline-offset: 2px;
+      }
+      #maysafe-session-trigger .maysafe-session-trigger-icon {
+        width: 28px;
+        height: 28px;
+        border: 1px solid rgba(116, 242, 214, 0.34);
+        border-radius: 999px;
+        display: inline-grid;
+        place-items: center;
+        color: #74f2d6;
+        background: rgba(116, 242, 214, 0.09);
+      }
+      #maysafe-session-trigger svg,
+      #maysafe-session-panel .maysafe-session-logo svg {
+        width: 16px;
+        height: 16px;
+        fill: none;
+        stroke: currentColor;
+        stroke-width: 1.8;
+        stroke-linejoin: round;
+      }
+      #maysafe-session-trigger .maysafe-session-trigger-text {
+        color: #f8fafc;
+        font-size: 13px;
+        font-weight: 850;
+        letter-spacing: 0;
       }
       #maysafe-session-panel {
-        width: min(300px, calc(100vw - 28px));
-        padding: 12px;
-        border: 1px solid rgba(203, 213, 225, 0.72);
-        border-radius: 14px;
-        background: rgba(255, 255, 255, 0.92);
-        box-shadow: 0 22px 56px rgba(15, 23, 42, 0.2);
-        color: #0f172a;
-        backdrop-filter: blur(18px);
+        width: min(380px, calc(100vw - 32px));
+        padding: 14px;
+        border: 1px solid rgba(114, 133, 153, 0.28);
+        border-radius: 18px;
+        background:
+          radial-gradient(circle at 0% 0%, rgba(116, 242, 214, 0.14), transparent 32%),
+          linear-gradient(145deg, rgba(13, 19, 28, 0.98), rgba(7, 11, 17, 0.98));
+        box-shadow:
+          0 28px 80px rgba(0, 0, 0, 0.44),
+          inset 0 1px 0 rgba(255, 255, 255, 0.05);
+        color: #e7edf4;
+        backdrop-filter: blur(20px);
       }
       #maysafe-session-panel[hidden] {
         display: none;
       }
       #maysafe-session-panel .maysafe-session-head {
         display: flex;
-        align-items: flex-start;
+        align-items: center;
         justify-content: space-between;
         gap: 12px;
-        margin-bottom: 10px;
+        padding-bottom: 12px;
+        border-bottom: 1px solid rgba(114, 133, 153, 0.16);
+      }
+      #maysafe-session-panel .maysafe-session-brand {
+        min-width: 0;
+        display: flex;
+        align-items: center;
+        gap: 11px;
+      }
+      #maysafe-session-panel .maysafe-session-logo {
+        width: 36px;
+        height: 36px;
+        border: 1px solid rgba(116, 242, 214, 0.34);
+        border-radius: 12px;
+        display: inline-grid;
+        place-items: center;
+        flex: none;
+        color: #74f2d6;
+        background: rgba(116, 242, 214, 0.09);
       }
       #maysafe-session-panel .maysafe-session-head strong {
         display: block;
-        color: #0f172a;
-        font-size: 15px;
+        color: #f8fafc;
+        font-size: 16px;
         line-height: 1.2;
-        font-weight: 800;
+        font-weight: 880;
       }
       #maysafe-session-panel .maysafe-session-head span {
         display: block;
         margin-top: 2px;
-        color: #64748b;
+        color: #91a4b8;
         font-size: 12px;
       }
       #maysafe-session-panel .maysafe-session-close {
@@ -368,59 +449,95 @@
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        border: 0;
-        border-radius: 8px;
-        background: #f1f5f9;
-        color: #64748b;
+        border: 1px solid rgba(114, 133, 153, 0.22);
+        border-radius: 10px;
+        background: rgba(9, 14, 21, 0.72);
+        color: #91a4b8;
         cursor: pointer;
         font-size: 18px;
         line-height: 1;
       }
       #maysafe-session-panel .maysafe-session-close:hover {
-        background: #e2e8f0;
-        color: #0f172a;
+        border-color: rgba(116, 242, 214, 0.46);
+        color: #f8fafc;
+        background: rgba(116, 242, 214, 0.08);
       }
       #maysafe-session-panel .maysafe-session-actions {
+        margin-top: 12px;
         display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 8px;
+        gap: 9px;
       }
       #maysafe-session-panel .maysafe-session-actions button {
         width: 100%;
-        min-height: 36px;
+        min-height: 54px;
         margin: 0;
-        border: 1px solid #dbe3ee;
-        border-radius: 8px;
-        background: #f8fafc;
-        color: #0f172a;
+        border: 1px solid rgba(114, 133, 153, 0.22);
+        border-radius: 13px;
+        padding: 10px 12px;
+        display: grid;
+        gap: 3px;
+        background: rgba(9, 14, 21, 0.66);
+        color: #e7edf4;
         cursor: pointer;
         font: inherit;
-        font-weight: 700;
-        transition: border-color 140ms ease, color 140ms ease, background-color 140ms ease, transform 140ms ease;
+        text-align: left;
+        transition: border-color 140ms ease, color 140ms ease, background 140ms ease, transform 140ms ease;
       }
       #maysafe-session-panel .maysafe-session-actions button:hover {
-        background: #ffffff;
-        border-color: #12b8aa;
-        color: #0f766e;
+        border-color: rgba(116, 242, 214, 0.58);
+        background: rgba(116, 242, 214, 0.08);
         transform: translateY(-1px);
       }
+      #maysafe-session-panel .maysafe-session-actions button strong {
+        color: #f8fafc;
+        font-size: 13px;
+        font-weight: 850;
+      }
+      #maysafe-session-panel .maysafe-session-actions button span {
+        color: #91a4b8;
+        font-size: 12px;
+      }
+      #maysafe-session-panel .maysafe-session-foot {
+        margin-top: 12px;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 10px;
+        align-items: center;
+      }
       #maysafe-session-status {
-        min-height: 34px;
-        margin-top: 10px;
-        padding: 8px 10px;
-        border-radius: 8px;
-        background: #f8fafc;
-        color: #64748b;
+        min-height: 36px;
+        padding: 9px 10px;
+        border: 1px solid rgba(114, 133, 153, 0.18);
+        border-radius: 12px;
+        background: rgba(5, 9, 14, 0.54);
+        color: #91a4b8;
         font-size: 12px;
         word-break: break-word;
+      }
+      #maysafe-session-status[data-state="success"] {
+        border-color: rgba(116, 242, 214, 0.36);
+        color: #74f2d6;
+      }
+      #maysafe-session-status[data-state="error"] {
+        border-color: rgba(251, 113, 133, 0.4);
+        color: #fda4af;
+      }
+      #maysafe-session-panel .maysafe-session-foot > span {
+        border: 1px solid rgba(116, 242, 214, 0.24);
+        border-radius: 999px;
+        padding: 5px 8px;
+        color: #74f2d6;
+        background: rgba(116, 242, 214, 0.08);
+        font: 800 10px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        text-transform: uppercase;
       }
       @media (max-width: 520px) {
         #maysafe-session-root {
           right: 12px;
           bottom: 12px;
         }
-        #maysafe-session-panel .maysafe-session-actions {
-          grid-template-columns: minmax(0, 1fr);
+        #maysafe-session-panel {
+          width: calc(100vw - 24px);
         }
       }
     `;
@@ -435,11 +552,13 @@
     document.body.appendChild(root);
     trigger.addEventListener("click", () => setOpen(true));
     panel.addEventListener("click", (event) => {
-      if (event.target.closest(".maysafe-session-close")) {
+      const target = event.target instanceof Element ? event.target : null;
+      if (!target) return;
+      if (target.closest(".maysafe-session-close")) {
         setOpen(false);
         return;
       }
-      const button = event.target.closest("button[data-kind]");
+      const button = target.closest("button[data-kind]");
       if (!button) return;
       void copyPayload(button.dataset.kind);
     });
