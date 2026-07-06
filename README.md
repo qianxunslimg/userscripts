@@ -9,6 +9,7 @@
 ## Scripts
 
 - `scripts/chatgpt-session-converter.user.js`: ChatGPT 页面内复制 session JSON、CPA JSON、sub2api、sessionToken、accessToken。默认折叠成右下角轻量入口，点击后展开。
+- `scripts/chatgpt-workspace-join-request.user.js`: ChatGPT 页面内本地缓存 workspace ID，支持名称、描述、启用勾选和运行记录，只对选中的空间手动发送加入请求。
 
 ## Frontend
 
@@ -16,6 +17,7 @@
 
 ```text
 /userscripts/chatgpt-session-converter.user.js
+/userscripts/chatgpt-workspace-join-request.user.js
 ```
 
 新增脚本时：
