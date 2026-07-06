@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Resource Sniffer
 // @namespace    https://almoststable.com/userscripts/
-// @version      0.1.1
+// @version      0.1.2
 // @author       qxslimg
 // @description  Sniff original images, video files, HLS/DASH streams, and media candidates from DOM, srcset, CSS, performance, fetch, and XHR. Local only.
 // @match        *://*/*
@@ -35,11 +35,6 @@
     sort: "quality",
     scanning: true,
     records: new Map(),
-    contextMenu: {
-      open: false,
-      x: 16,
-      y: 16,
-    },
   };
 
   let root = null;
@@ -54,7 +49,6 @@
   observeDom();
   installShortcut();
   installMenuCommand();
-  installContextMenu();
   whenReady(() => {
     injectPanel();
     scanPage();
@@ -640,12 +634,6 @@
           state.open ? closePanel() : openPanel();
           scheduleRender();
         }
-        if (event.code === "Escape") {
-          if (state.contextMenu.open) {
-            hideContextMenu();
-            scheduleRender();
-          }
-        }
       },
       true,
     );
@@ -665,43 +653,7 @@
     }
   }
 
-  function installContextMenu() {
-    document.addEventListener(
-      "contextmenu",
-      (event) => {
-        const target = event.target;
-        if (event.shiftKey) return;
-        if (isInOwnPanel(target) || isEditableTarget(target)) return;
-        event.preventDefault();
-        state.contextMenu.open = true;
-        state.contextMenu.x = clamp(event.clientX, 8, Math.max(8, window.innerWidth - 220));
-        state.contextMenu.y = clamp(event.clientY, 8, Math.max(8, window.innerHeight - 160));
-        scheduleRender();
-      },
-      true,
-    );
-    document.addEventListener(
-      "click",
-      (event) => {
-        if (!state.contextMenu.open || isInOwnPanel(event.target)) return;
-        hideContextMenu();
-        scheduleRender();
-      },
-      true,
-    );
-    window.addEventListener(
-      "scroll",
-      () => {
-        if (!state.contextMenu.open) return;
-        hideContextMenu();
-        scheduleRender();
-      },
-      true,
-    );
-  }
-
   function openPanel() {
-    hideContextMenu();
     state.open = true;
     scanPage();
     scheduleRender();
@@ -709,17 +661,6 @@
 
   function closePanel() {
     state.open = false;
-    hideContextMenu();
-  }
-
-  function hideContextMenu() {
-    state.contextMenu.open = false;
-  }
-
-  function isEditableTarget(target) {
-    const element = target instanceof Element ? target : null;
-    if (!element) return false;
-    return Boolean(element.closest("input, textarea, select, [contenteditable]"));
   }
 
   function isInOwnPanel(node) {
@@ -781,43 +722,6 @@
         box-shadow: 0 28px 92px rgba(0, 0, 0, 0.52);
         backdrop-filter: blur(18px);
         pointer-events: auto;
-      }
-      #${ROOT_ID} .rs-context-menu {
-        position: fixed;
-        width: 206px;
-        border: 1px solid rgba(123, 235, 215, 0.42);
-        border-radius: 14px;
-        overflow: hidden;
-        background:
-          radial-gradient(circle at 0% 0%, rgba(123, 235, 215, 0.16), transparent 42%),
-          linear-gradient(145deg, rgba(8, 13, 19, 0.98), rgba(11, 18, 29, 0.98));
-        box-shadow: 0 20px 54px rgba(0, 0, 0, 0.42);
-        backdrop-filter: blur(16px);
-        pointer-events: auto;
-      }
-      #${ROOT_ID} .rs-context-item {
-        width: 100%;
-        min-height: 42px;
-        border: 0;
-        border-bottom: 1px solid rgba(130, 151, 174, 0.12);
-        border-radius: 0;
-        padding: 9px 12px;
-        display: grid;
-        gap: 2px;
-        color: #f4f7fb;
-        background: transparent;
-        text-align: left;
-      }
-      #${ROOT_ID} .rs-context-item:last-child {
-        border-bottom: 0;
-      }
-      #${ROOT_ID} .rs-context-item:hover {
-        color: #7bebd7;
-        background: rgba(123, 235, 215, 0.1);
-      }
-      #${ROOT_ID} .rs-context-item span {
-        color: #8fa3ba;
-        font-size: 11px;
       }
       #${ROOT_ID} .rs-head {
         border-bottom: 1px solid rgba(130, 151, 174, 0.19);
@@ -1214,8 +1118,6 @@
 
   function handleAction(action) {
     const selected = selectedRecord();
-    if (state.contextMenu.open && action !== "open-panel") hideContextMenu();
-    if (action === "open-panel") openPanel();
     if (action === "close") closePanel();
     if (action === "scan") scanPage();
     if (action === "toggle-scan") state.scanning = !state.scanning;
@@ -1238,25 +1140,8 @@
     const selected = selectedRecord() || records[0] || null;
     if (selected && state.selectedKey !== selected.key) state.selectedKey = selected.key;
     const scrollSnapshot = snapshotPanelScroll();
-    root.innerHTML = `${state.open ? renderPanel(records, selected) : ""}${renderContextMenu()}`;
+    root.innerHTML = state.open ? renderPanel(records, selected) : "";
     restorePanelScroll(scrollSnapshot);
-  }
-
-  function renderContextMenu() {
-    if (!state.contextMenu.open) return "";
-    const stats = summarizeRecords();
-    return `
-      <section class="rs-context-menu" style="left: ${state.contextMenu.x}px; top: ${state.contextMenu.y}px" aria-label="Resource Sniffer menu">
-        <button class="rs-context-item" type="button" data-rs-action="open-panel">
-          打开资源嗅探器
-          <span>${stats.all} 个候选，Shift+右键保留原菜单</span>
-        </button>
-        <button class="rs-context-item" type="button" data-rs-action="scan">
-          重新扫描本页
-          <span>图片、视频、srcset、HLS/DASH</span>
-        </button>
-      </section>
-    `;
   }
 
   function snapshotPanelScroll() {
@@ -1284,7 +1169,7 @@
             <span class="rs-mark">RES</span>
             <div>
               <h2>资源嗅探器</h2>
-              <p class="rs-sub">本地嗅探图片原图、srcset 高分候选、视频直链、HLS/DASH 流地址。默认不显示悬浮按钮，右键页面或 Alt+Shift+R 打开。</p>
+              <p class="rs-sub">本地嗅探图片原图、srcset 高分候选、视频直链、HLS/DASH 流地址。默认不占页面空间，可从油猴菜单或 Alt+Shift+R 打开。</p>
             </div>
           </div>
           <div class="rs-actions">
@@ -1577,10 +1462,6 @@
   function toNumber(value) {
     const number = Number(value);
     return Number.isFinite(number) && number > 0 ? Math.round(number) : 0;
-  }
-
-  function clamp(value, min, max) {
-    return Math.min(max, Math.max(min, value));
   }
 
   function mergeUnique(a, b) {
