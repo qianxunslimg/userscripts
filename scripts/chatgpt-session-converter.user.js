@@ -1,7 +1,8 @@
 // ==UserScript==
 // @name         ChatGPT Session Copier
 // @namespace    https://web-tools.local/
-// @version      0.1.0
+// @version      0.1.1
+// @author       qxslimg
 // @description  Copy ChatGPT session JSON, CPA JSON, sub2api bundle, session token, and access token from chatgpt.com.
 // @match        https://chatgpt.com/*
 // @match        https://chat.openai.com/*

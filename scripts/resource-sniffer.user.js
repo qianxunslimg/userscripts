@@ -1,11 +1,13 @@
 // ==UserScript==
 // @name         Resource Sniffer
 // @namespace    https://almoststable.com/userscripts/
-// @version      0.1.0
+// @version      0.1.1
+// @author       qxslimg
 // @description  Sniff original images, video files, HLS/DASH streams, and media candidates from DOM, srcset, CSS, performance, fetch, and XHR. Local only.
 // @match        *://*/*
 // @grant        GM_setClipboard
 // @grant        GM_download
+// @grant        GM_registerMenuCommand
 // @grant        unsafeWindow
 // @connect      *
 // @run-at       document-start
@@ -19,7 +21,7 @@
   const STORAGE_KEY = "qx_resource_sniffer_settings_v1";
   const pageWindow = typeof unsafeWindow !== "undefined" ? unsafeWindow : window;
   const imageExtPattern = /\.(?:avif|webp|png|jpe?g|gif|svg|bmp|ico|tiff?)(?:[?#]|$)/i;
-  const videoExtPattern = /\.(?:mp4|m4v|webm|mov|mkv|flv|avi|wmv|ts|m2ts|3gp)(?:[?#]|$)/i;
+  const videoExtPattern = /\.(?:mp4|m4v|m4s|m4a|webm|mov|mkv|flv|avi|wmv|ts|m2ts|3gp)(?:[?#]|$)/i;
   const streamExtPattern = /\.(?:m3u8|mpd)(?:[?#]|$)/i;
   const blockedUrlPattern = /^(?:data|javascript|about|chrome|chrome-extension):/i;
   const scanDebounceMs = 700;
@@ -33,6 +35,11 @@
     sort: "quality",
     scanning: true,
     records: new Map(),
+    contextMenu: {
+      open: false,
+      x: 16,
+      y: 16,
+    },
   };
 
   let root = null;
@@ -46,6 +53,8 @@
   observePerformance();
   observeDom();
   installShortcut();
+  installMenuCommand();
+  installContextMenu();
   whenReady(() => {
     injectPanel();
     scanPage();
@@ -158,6 +167,8 @@
 
     const key = stripHash(url);
     const existing = state.records.get(key);
+    const previousSelectedKey = state.selectedKey;
+    const beforeSignature = existing ? recordSignature(existing) : "";
     const now = Date.now();
     const width = toNumber(input.width);
     const height = toNumber(input.height);
@@ -203,14 +214,31 @@
     record.previewUrl = choosePreview(record, input.previewUrl || url);
     record.tags = Array.from(tags).slice(0, 12);
     record.sources = mergeUnique(record.sources, [input.source || "unknown"]).slice(0, 8);
-    record.downloadable = !url.startsWith("blob:");
-    record.note = record.downloadable ? "" : "blob/MSE 资源不能直接还原成原始文件，只能尝试打开当前页面提供的地址。";
+    record.downloadable = /^https?:/i.test(url);
+    record.note = record.downloadable ? "" : "blob/MSE 是播放器内存地址，不是原始视频文件。请在列表里找 .m4s、.m3u8、.mpd 等真实网络候选，必要时用专门下载器和登录 Cookie。";
 
     state.records.set(key, record);
     trimRecords();
     if (!state.selectedKey || !state.records.has(state.selectedKey)) state.selectedKey = key;
-    scheduleRender();
+    if (!existing || beforeSignature !== recordSignature(record) || previousSelectedKey !== state.selectedKey) scheduleRender();
     return record;
+  }
+
+  function recordSignature(record) {
+    return [
+      record.kind,
+      record.ext,
+      record.width,
+      record.height,
+      record.score,
+      record.title,
+      record.contentType,
+      record.previewUrl,
+      record.downloadable ? "1" : "0",
+      record.note,
+      (record.sources || []).join("|"),
+      (record.tags || []).join("|"),
+    ].join("\n");
   }
 
   function rankKind(a, b) {
@@ -256,6 +284,7 @@
 
   function scanDocumentMedia() {
     document.querySelectorAll("img").forEach((img) => {
+      if (isInOwnPanel(img)) return;
       const title = elementTitle(img);
       const naturalWidth = img.naturalWidth || img.width || 0;
       const naturalHeight = img.naturalHeight || img.height || 0;
@@ -285,6 +314,7 @@
     });
 
     document.querySelectorAll("picture source, source[srcset]").forEach((source) => {
+      if (isInOwnPanel(source)) return;
       for (const candidate of parseSrcset(source.getAttribute("srcset"))) {
         addResource({
           url: candidate.url,
@@ -300,6 +330,7 @@
     });
 
     document.querySelectorAll("video").forEach((video) => {
+      if (isInOwnPanel(video)) return;
       const title = elementTitle(video);
       addResource({
         url: video.currentSrc || video.src,
@@ -334,7 +365,9 @@
   }
 
   function scanCssBackgrounds() {
-    const elements = Array.from(document.querySelectorAll("body, body *")).slice(0, 2500);
+    const elements = Array.from(document.querySelectorAll("body, body *"))
+      .filter((element) => !isInOwnPanel(element))
+      .slice(0, 2500);
     for (const element of elements) {
       let style;
       try {
@@ -359,6 +392,7 @@
 
   function scanLinksAndMeta() {
     document.querySelectorAll("a[href], link[href], meta[property], meta[name]").forEach((element) => {
+      if (isInOwnPanel(element)) return;
       const rawUrl =
         element.getAttribute("href") ||
         element.getAttribute("content") ||
@@ -406,12 +440,17 @@
     whenReady(() => {
       try {
         const observer = new MutationObserver((mutations) => {
+          let shouldScan = false;
           for (const mutation of mutations) {
+            if (isInOwnPanel(mutation.target)) continue;
+            if (mutation.type === "attributes") shouldScan = true;
             for (const node of mutation.addedNodes) {
+              if (isInOwnPanel(node)) continue;
               if (node.nodeType === 1) scanElement(node);
+              shouldScan = true;
             }
           }
-          scheduleScan();
+          if (shouldScan) scheduleScan();
         });
         observer.observe(document.documentElement, {
           childList: true,
@@ -427,6 +466,7 @@
 
   function scanElement(node) {
     if (!(node instanceof Element)) return;
+    if (isInOwnPanel(node)) return;
     if (node.matches?.("img, video, source, a[href], link[href]")) scheduleScan();
     if (node.querySelector?.("img, video, source, a[href], link[href]")) scheduleScan();
   }
@@ -597,12 +637,96 @@
       (event) => {
         if (event.altKey && event.shiftKey && event.code === "KeyR") {
           event.preventDefault();
-          state.open = !state.open;
+          state.open ? closePanel() : openPanel();
           scheduleRender();
+        }
+        if (event.code === "Escape") {
+          if (state.contextMenu.open) {
+            hideContextMenu();
+            scheduleRender();
+          }
         }
       },
       true,
     );
+  }
+
+  function installMenuCommand() {
+    try {
+      if (typeof GM_registerMenuCommand === "function") {
+        GM_registerMenuCommand("打开资源嗅探器", openPanel);
+        GM_registerMenuCommand("重新扫描媒体资源", () => {
+          scanPage();
+          scheduleRender();
+        });
+      }
+    } catch {
+      // Menu command is optional across userscript managers.
+    }
+  }
+
+  function installContextMenu() {
+    document.addEventListener(
+      "contextmenu",
+      (event) => {
+        const target = event.target;
+        if (event.shiftKey) return;
+        if (isInOwnPanel(target) || isEditableTarget(target)) return;
+        event.preventDefault();
+        state.contextMenu.open = true;
+        state.contextMenu.x = clamp(event.clientX, 8, Math.max(8, window.innerWidth - 220));
+        state.contextMenu.y = clamp(event.clientY, 8, Math.max(8, window.innerHeight - 160));
+        scheduleRender();
+      },
+      true,
+    );
+    document.addEventListener(
+      "click",
+      (event) => {
+        if (!state.contextMenu.open || isInOwnPanel(event.target)) return;
+        hideContextMenu();
+        scheduleRender();
+      },
+      true,
+    );
+    window.addEventListener(
+      "scroll",
+      () => {
+        if (!state.contextMenu.open) return;
+        hideContextMenu();
+        scheduleRender();
+      },
+      true,
+    );
+  }
+
+  function openPanel() {
+    hideContextMenu();
+    state.open = true;
+    scanPage();
+    scheduleRender();
+  }
+
+  function closePanel() {
+    state.open = false;
+    hideContextMenu();
+  }
+
+  function hideContextMenu() {
+    state.contextMenu.open = false;
+  }
+
+  function isEditableTarget(target) {
+    const element = target instanceof Element ? target : null;
+    if (!element) return false;
+    return Boolean(element.closest("input, textarea, select, [contenteditable]"));
+  }
+
+  function isInOwnPanel(node) {
+    if (!node || !root) return false;
+    if (node === root) return true;
+    const element = node instanceof Element ? node : node.parentElement;
+    return Boolean(element && root.contains(element));
   }
 
   function injectPanel() {
@@ -627,9 +751,9 @@
       }
       #${ROOT_ID} {
         position: fixed;
-        left: 16px;
-        bottom: 16px;
+        inset: 0;
         z-index: 2147483647;
+        pointer-events: none;
         color: #f4f7fb;
         font: 13px/1.45 Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       }
@@ -641,28 +765,10 @@
       #${ROOT_ID} button {
         cursor: pointer;
       }
-      #${ROOT_ID} .rs-trigger {
-        min-width: 138px;
-        height: 44px;
-        border: 1px solid rgba(123, 235, 215, 0.68);
-        border-radius: 999px;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        gap: 9px;
-        color: #06110f;
-        background: linear-gradient(135deg, #7bebd7, #ffd66b);
-        box-shadow: 0 18px 42px rgba(0, 0, 0, 0.32);
-        font-weight: 900;
-      }
-      #${ROOT_ID} .rs-trigger span {
-        border-radius: 999px;
-        padding: 2px 7px;
-        color: #7bebd7;
-        background: rgba(3, 10, 14, 0.92);
-        font: 900 11px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-      }
       #${ROOT_ID} .rs-panel {
+        position: fixed;
+        left: 16px;
+        bottom: 16px;
         width: min(1040px, calc(100vw - 28px));
         height: min(740px, calc(100vh - 28px));
         border: 1px solid rgba(130, 151, 174, 0.34);
@@ -674,6 +780,44 @@
           linear-gradient(145deg, rgba(8, 13, 19, 0.97), rgba(11, 18, 29, 0.98));
         box-shadow: 0 28px 92px rgba(0, 0, 0, 0.52);
         backdrop-filter: blur(18px);
+        pointer-events: auto;
+      }
+      #${ROOT_ID} .rs-context-menu {
+        position: fixed;
+        width: 206px;
+        border: 1px solid rgba(123, 235, 215, 0.42);
+        border-radius: 14px;
+        overflow: hidden;
+        background:
+          radial-gradient(circle at 0% 0%, rgba(123, 235, 215, 0.16), transparent 42%),
+          linear-gradient(145deg, rgba(8, 13, 19, 0.98), rgba(11, 18, 29, 0.98));
+        box-shadow: 0 20px 54px rgba(0, 0, 0, 0.42);
+        backdrop-filter: blur(16px);
+        pointer-events: auto;
+      }
+      #${ROOT_ID} .rs-context-item {
+        width: 100%;
+        min-height: 42px;
+        border: 0;
+        border-bottom: 1px solid rgba(130, 151, 174, 0.12);
+        border-radius: 0;
+        padding: 9px 12px;
+        display: grid;
+        gap: 2px;
+        color: #f4f7fb;
+        background: transparent;
+        text-align: left;
+      }
+      #${ROOT_ID} .rs-context-item:last-child {
+        border-bottom: 0;
+      }
+      #${ROOT_ID} .rs-context-item:hover {
+        color: #7bebd7;
+        background: rgba(123, 235, 215, 0.1);
+      }
+      #${ROOT_ID} .rs-context-item span {
+        color: #8fa3ba;
+        font-size: 11px;
       }
       #${ROOT_ID} .rs-head {
         border-bottom: 1px solid rgba(130, 151, 174, 0.19);
@@ -990,7 +1134,7 @@
         text-align: center;
       }
       #${ROOT_ID} .rs-toast {
-        position: absolute;
+        position: fixed;
         left: 16px;
         bottom: 16px;
         border: 1px solid rgba(123, 235, 215, 0.5);
@@ -1002,12 +1146,9 @@
         font-weight: 900;
       }
       @media (max-width: 860px) {
-        #${ROOT_ID} {
-          left: 8px;
-          right: auto;
-          bottom: 8px;
-        }
         #${ROOT_ID} .rs-panel {
+          left: 8px;
+          bottom: 8px;
           width: 100%;
           height: min(780px, calc(100vh - 16px));
         }
@@ -1032,13 +1173,6 @@
   function handleClick(event) {
     const target = event.target instanceof Element ? event.target : null;
     if (!target) return;
-
-    if (target.closest("[data-rs-open]")) {
-      state.open = true;
-      scanPage();
-      scheduleRender();
-      return;
-    }
 
     const action = target.closest("[data-rs-action]")?.dataset.rsAction;
     if (action) {
@@ -1080,7 +1214,9 @@
 
   function handleAction(action) {
     const selected = selectedRecord();
-    if (action === "close") state.open = false;
+    if (state.contextMenu.open && action !== "open-panel") hideContextMenu();
+    if (action === "open-panel") openPanel();
+    if (action === "close") closePanel();
     if (action === "scan") scanPage();
     if (action === "toggle-scan") state.scanning = !state.scanning;
     if (action === "clear") {
@@ -1101,17 +1237,42 @@
     const records = filteredRecords();
     const selected = selectedRecord() || records[0] || null;
     if (selected && state.selectedKey !== selected.key) state.selectedKey = selected.key;
-    root.innerHTML = state.open ? renderPanel(records, selected) : renderTrigger();
+    const scrollSnapshot = snapshotPanelScroll();
+    root.innerHTML = `${state.open ? renderPanel(records, selected) : ""}${renderContextMenu()}`;
+    restorePanelScroll(scrollSnapshot);
   }
 
-  function renderTrigger() {
+  function renderContextMenu() {
+    if (!state.contextMenu.open) return "";
     const stats = summarizeRecords();
     return `
-      <button class="rs-trigger" type="button" data-rs-open="1" title="Resource Sniffer (Alt+Shift+R)">
-        <span>RES</span>
-        <strong>${stats.all} resources</strong>
-      </button>
+      <section class="rs-context-menu" style="left: ${state.contextMenu.x}px; top: ${state.contextMenu.y}px" aria-label="Resource Sniffer menu">
+        <button class="rs-context-item" type="button" data-rs-action="open-panel">
+          打开资源嗅探器
+          <span>${stats.all} 个候选，Shift+右键保留原菜单</span>
+        </button>
+        <button class="rs-context-item" type="button" data-rs-action="scan">
+          重新扫描本页
+          <span>图片、视频、srcset、HLS/DASH</span>
+        </button>
+      </section>
     `;
+  }
+
+  function snapshotPanelScroll() {
+    if (!root || !state.open) return null;
+    return {
+      listTop: root.querySelector(".rs-list")?.scrollTop || 0,
+      detailTop: root.querySelector(".rs-detail")?.scrollTop || 0,
+    };
+  }
+
+  function restorePanelScroll(snapshot) {
+    if (!snapshot || !root || !state.open) return;
+    const list = root.querySelector(".rs-list");
+    const detail = root.querySelector(".rs-detail");
+    if (list) list.scrollTop = snapshot.listTop;
+    if (detail) detail.scrollTop = snapshot.detailTop;
   }
 
   function renderPanel(records, selected) {
@@ -1123,7 +1284,7 @@
             <span class="rs-mark">RES</span>
             <div>
               <h2>资源嗅探器</h2>
-              <p class="rs-sub">本地嗅探图片原图、srcset 高分候选、视频直链、HLS/DASH 流地址。默认左下角，不和右下角 Session Copy 抢位置。</p>
+              <p class="rs-sub">本地嗅探图片原图、srcset 高分候选、视频直链、HLS/DASH 流地址。默认不显示悬浮按钮，右键页面或 Alt+Shift+R 打开。</p>
             </div>
           </div>
           <div class="rs-actions">
@@ -1215,7 +1376,7 @@
           <div><dt>来源</dt><dd>${escapeHtml(record.sources.join(", ") || "-")}</dd></div>
         </dl>
         <div class="rs-detail-actions">
-          <button class="rs-button" type="button" data-rs-action="download">${record.kind === "stream" ? "复制流下载命令" : "下载原资源"}</button>
+          <button class="rs-button" type="button" data-rs-action="download">${downloadButtonLabel(record)}</button>
           <button class="rs-button" type="button" data-rs-action="open">新标签打开</button>
           <button class="rs-button" type="button" data-rs-action="copy-url">复制 URL</button>
           <button class="rs-button" type="button" data-rs-action="copy-command">复制下载命令</button>
@@ -1272,6 +1433,10 @@
   }
 
   function downloadRecord(record) {
+    if (!record.downloadable) {
+      void copyText(recordBundle(record), "blob/MSE 不能直接下载，已复制资源信息");
+      return;
+    }
     if (record.kind === "stream") {
       void copyText(downloadCommand(record), "流下载命令已复制");
       return;
@@ -1308,10 +1473,23 @@
 
   function downloadCommand(record) {
     const filename = filenameFor(record);
+    if (!record.downloadable) {
+      return [
+        "# blob/MSE 地址不能用 curl 直接下载。",
+        "# 在资源列表里继续找 .m4s、.m3u8、.mpd 或 fetch/xhr 捕获到的真实网络地址。",
+        `# captured: ${record.url}`,
+      ].join("\n");
+    }
     if (record.kind === "stream") {
       return [`yt-dlp ${shellQuote(record.url)} -o ${shellQuote("%(title)s.%(ext)s")}`, `ffmpeg -i ${shellQuote(record.url)} -c copy ${shellQuote(filename.replace(/\.(m3u8|mpd)$/i, ".mp4"))}`].join("\n");
     }
     return `curl -L ${shellQuote(record.url)} -o ${shellQuote(filename)}`;
+  }
+
+  function downloadButtonLabel(record) {
+    if (!record.downloadable) return "复制资源信息";
+    if (record.kind === "stream") return "复制流下载命令";
+    return "下载原资源";
   }
 
   function recordBundle(record) {
@@ -1323,8 +1501,10 @@
         size: sizeLabel(record),
         extension: record.ext,
         contentType: record.contentType,
+        downloadable: record.downloadable,
         sources: record.sources,
         tags: record.tags,
+        note: record.note,
         download: downloadCommand(record),
       },
       null,
@@ -1397,6 +1577,10 @@
   function toNumber(value) {
     const number = Number(value);
     return Number.isFinite(number) && number > 0 ? Math.round(number) : 0;
+  }
+
+  function clamp(value, min, max) {
+    return Math.min(max, Math.max(min, value));
   }
 
   function mergeUnique(a, b) {
